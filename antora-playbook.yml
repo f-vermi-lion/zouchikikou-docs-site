@@ -1,0 +1,14 @@
+site:
+  title: 造智機巧 Docs
+  start_page: meta-architecture::architecture-documentation-publishing-platform/index.adoc
+content:
+  sources:
+    - url: https://github.com/f-vermi-lion/zk_meta_architecture.git
+      branches: main
+      start_path: docs
+ui:
+  bundle:
+    url: https://github.com/antora/antora-ui-default/releases/download/v3.1.0/ui-bundle.zip
+    snapshot: true
+output:
+  dir: build/site
