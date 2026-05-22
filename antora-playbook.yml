@@ -1,6 +1,10 @@
 site:
   title: 造智機巧 Docs
   start_page: meta-architecture::architecture-documentation-publishing-platform/index.adoc
+runtime:
+  fetch: true
+  log:
+    failure_level: error
 content:
   sources:
     - url: https://github.com/f-vermi-lion/zk_meta_architecture.git
@@ -8,7 +12,7 @@ content:
       start_path: docs
 ui:
   bundle:
-    url: https://github.com/antora/antora-ui-default/releases/download/v3.1.0/ui-bundle.zip
+    url: https://gitlab.com/antora/antora-ui-default/-/jobs/artifacts/HEAD/raw/build/ui-bundle.zip?job=bundle-stable
     snapshot: true
 output:
   dir: build/site
