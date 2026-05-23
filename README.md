@@ -2,6 +2,10 @@
 
 造智機巧のアーキテクチャ文書をAntoraで集約して確認するためのサイト用リポジトリです。
 
+## 公開URL
+
+https://f-vermi-lion.github.io/zouchikikou-docs-site/meta-architecture/architecture-documentation-publishing-platform/index.html
+
 ## 初期段階の範囲
 
 - publicな文書だけをcontent sourceとして扱う。
