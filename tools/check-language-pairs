@@ -1,0 +1,174 @@
+#!/usr/bin/env python3
+"""Check English/Japanese Antora page pairs.
+
+The command validates Antora content roots. It compares pages under
+modules/ROOT/pages and modules/ja/pages by relative path, then checks
+the required :lang: attribute for each page.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path
+import re
+import sys
+
+
+ANTORA_NAME_RE = re.compile(r"^name:\s*(.*?)\s*(?:#.*)?$")
+LANG_RE = re.compile(r"^:lang:\s*(.*?)\s*$")
+SKIPPED_COMPONENT_NAMES = {"meta-architecture"}
+
+
+@dataclass(frozen=True)
+class Issue:
+    code: str
+    content_root: str
+    module: str
+    relative_path: str
+    message: str
+
+    def format(self) -> str:
+        return "\t".join(
+            (
+                self.code,
+                self.content_root,
+                self.module,
+                self.relative_path,
+                self.message,
+            )
+        )
+
+
+def read_antora_name(content_root: Path) -> str | None:
+    antora_yml = content_root / "antora.yml"
+    for line in antora_yml.read_text(encoding="utf-8", errors="replace").splitlines():
+        match = ANTORA_NAME_RE.match(line)
+        if match:
+            return match.group(1).strip().strip("\"'")
+    return None
+
+
+def read_lang(page: Path) -> str | None:
+    for line in page.read_text(encoding="utf-8", errors="replace").splitlines():
+        match = LANG_RE.match(line)
+        if match:
+            value = match.group(1).strip()
+            return value if value else None
+    return None
+
+
+def collect_pages(content_root: Path, module: str) -> dict[str, Path]:
+    pages_root = content_root / "modules" / module / "pages"
+    if not pages_root.is_dir():
+        return {}
+    return {
+        page.relative_to(pages_root).as_posix(): page
+        for page in sorted(pages_root.rglob("*.adoc"))
+    }
+
+
+def validate_content_root(raw_path: str) -> Path:
+    content_root = Path(raw_path)
+    if not content_root.is_dir():
+        raise ValueError("content root is not a directory")
+    if not (content_root / "antora.yml").is_file():
+        raise ValueError("content root does not contain antora.yml")
+    return content_root
+
+
+def check_lang(
+    issues: list[Issue],
+    content_root_label: str,
+    module: str,
+    relative_path: str,
+    page: Path,
+    expected_lang: str,
+) -> None:
+    actual_lang = read_lang(page)
+    if actual_lang is None:
+        issues.append(
+            Issue(
+                "missing_lang",
+                content_root_label,
+                module,
+                relative_path,
+                "missing :lang: attribute",
+            )
+        )
+    elif actual_lang != expected_lang:
+        issues.append(
+            Issue(
+                "lang_mismatch",
+                content_root_label,
+                module,
+                relative_path,
+                f"expected :lang: {expected_lang}, found {actual_lang}",
+            )
+        )
+
+
+def check_content_root(raw_path: str) -> list[Issue]:
+    content_root = validate_content_root(raw_path)
+    component_name = read_antora_name(content_root)
+    if component_name in SKIPPED_COMPONENT_NAMES:
+        return []
+
+    root_pages = collect_pages(content_root, "ROOT")
+    ja_pages = collect_pages(content_root, "ja")
+    issues: list[Issue] = []
+
+    for relative_path in sorted(set(root_pages) - set(ja_pages)):
+        issues.append(
+            Issue(
+                "missing_ja",
+                raw_path,
+                "ROOT",
+                relative_path,
+                "missing matching ja page for ROOT page",
+            )
+        )
+
+    for relative_path in sorted(set(ja_pages) - set(root_pages)):
+        issues.append(
+            Issue(
+                "missing_en",
+                raw_path,
+                "ja",
+                relative_path,
+                "missing matching ROOT page for ja page",
+            )
+        )
+
+    for relative_path, page in sorted(root_pages.items()):
+        check_lang(issues, raw_path, "ROOT", relative_path, page, "en")
+
+    for relative_path, page in sorted(ja_pages.items()):
+        check_lang(issues, raw_path, "ja", relative_path, page, "ja")
+
+    return issues
+
+
+def main(argv: list[str]) -> int:
+    if not argv:
+        print("usage: tools/check-language-pairs <content-root>...", file=sys.stderr)
+        return 2
+
+    all_issues: list[Issue] = []
+    for raw_path in argv:
+        try:
+            all_issues.extend(check_content_root(raw_path))
+        except OSError as error:
+            print(f"invalid_content_root\t{raw_path}\t{error}", file=sys.stderr)
+            return 2
+        except ValueError as error:
+            print(f"invalid_content_root\t{raw_path}\t{error}", file=sys.stderr)
+            return 2
+
+    for issue in all_issues:
+        print(issue.format())
+
+    return 1 if all_issues else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))
